@@ -23,10 +23,10 @@ model = CatBoostClassifier(iterations=100, learning_rate=0.1, depth=6, early_sto
 model.fit(X_train, y_train, eval_set=(X_test, y_test), verbose=10)
 
 # 保存模型
-model.save_model("catboost_model.cbm")
+model.save_model("security.cbm")
 
 # 保存编码器
-save_label_encoders(label_encoders, "label_encoders.pkl")
+save_label_encoders(label_encoders, "security_label_encoders.pkl")
 
 # 在测试集上评估模型
 y_pred = model.predict(X_test)

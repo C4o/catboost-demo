@@ -5,10 +5,10 @@ from prepare import preprocess_data, load_label_encoders
 
 # 加载模型
 model = CatBoostClassifier()
-model.load_model("catboost_model.cbm")
+model.load_model("security.cbm")
 
 # 加载编码器
-label_encoders = load_label_encoders("label_encoders.pkl")
+label_encoders = load_label_encoders("security_label_encoders.pkl")
 
 # 示例数据，包括一条新的 unsafe 验证数据
 example_data = '''
