@@ -97,6 +97,28 @@ print(f"Test Accuracy: {accuracy}")
 print(f"Predicted: {y_pred}")
 print(f"Actual: {y_test.values}")
 ```
+### output
+```shell
+$ python cb_train.py  
+0:      learn: 0.6822075        test: 0.6789635 best: 0.6789635 (0)     total: 137ms    remaining: 13.6s
+10:     learn: 0.6044272        test: 0.6087474 best: 0.6087474 (10)    total: 140ms    remaining: 1.13s
+20:     learn: 0.5385005        test: 0.5483047 best: 0.5480958 (19)    total: 141ms    remaining: 532ms
+30:     learn: 0.4829111        test: 0.5150429 best: 0.5150429 (30)    total: 143ms    remaining: 319ms
+40:     learn: 0.4405540        test: 0.4843827 best: 0.4843827 (40)    total: 145ms    remaining: 209ms
+50:     learn: 0.4022986        test: 0.4764177 best: 0.4737219 (48)    total: 148ms    remaining: 142ms
+60:     learn: 0.3703142        test: 0.4437111 best: 0.4437111 (60)    total: 150ms    remaining: 96.1ms
+70:     learn: 0.3422533        test: 0.4113572 best: 0.4113572 (70)    total: 153ms    remaining: 62.3ms
+80:     learn: 0.3175111        test: 0.3858701 best: 0.3858701 (80)    total: 155ms    remaining: 36.3ms
+90:     learn: 0.2956228        test: 0.3603579 best: 0.3603579 (90)    total: 157ms    remaining: 15.5ms
+99:     learn: 0.2780358        test: 0.3476682 best: 0.3473103 (96)    total: 159ms    remaining: 0us
+
+bestTest = 0.3473103455
+bestIteration = 96
+
+Test Accuracy: 1.0
+Predicted: [0 0]
+Actual: [0 0]
+```
 
 ## 调用模型
 ```python
@@ -132,6 +154,14 @@ predictions = model.predict(X_example)
 # 打印预测结果
 for i, prediction in enumerate(predictions):
     print(f"Example {i+1}: Predicted result is {prediction}")
+```
+
+### output 
+```shell
+$ python cb_predict.py
+Example 1: Predicted result is 0
+Example 2: Predicted result is 0
+Example 3: Predicted result is 1
 ```
 
 # WAF调用
