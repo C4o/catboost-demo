@@ -24,81 +24,107 @@ Pandas version 0.24.2
 
 ## 准备和预处理数据
 ```python
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+import joblib
 
+def preprocess_data(json_data, label_encoders=None):
+    df = pd.DataFrame(json_data)
+
+    # 对字符串特征进行编码
+    if label_encoders:
+        for column in df.columns:
+            if column in label_encoders:
+                if df[column].dtype == object:
+                    # 处理训练期间未见过的类别
+                    df[column + '_encoded'] = df[column].apply(lambda x: label_encoders[column].transform([x])[0] if x in label_encoders[column].classes_ else -1)
+                    df = df.drop(column, axis=1)
+    else:
+        label_encoders = {}
+        for column in df.columns:
+            if df[column].dtype == object:
+                label_encoders[column] = LabelEncoder()
+                df[column + '_encoded'] = label_encoders[column].fit_transform(df[column])
+                df = df.drop(column, axis=1)
+
+    return df, label_encoders
+
+def save_label_encoders(label_encoders, filepath):
+    joblib.dump(label_encoders, filepath)
+
+def load_label_encoders(filepath):
+    return joblib.load(filepath)
 ```
 
 
 ## 训练和生产模型
 `security.cbm`是生产出的模型文件
 ```python
+import json
 import pandas as pd
 from catboost import CatBoostClassifier
-from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from prepare import preprocess_data, save_label_encoders
 
-# 假设你有一个包含 HTTP 请求数据的 DataFrame
-data = {
-    'uri': ['/login', '/home', '/products', '/login', '/about', '/admin'],
-    'host': ['example.com', 'example.com', 'example.com', 'example.com', 'example.com', 'example.com'],
-    'referer': ['https://www.google.com', 'https://www.google.com', 'https://www.bing.com', 'https://www.yahoo.com', '', ''],
-    'cookie': ['session_id=12345;user_id=67890', 'session_id=54321;user_id=09876', 'session_id=98765;user_id=43210', 'session_id=24680;user_id=13579', '', ''],
-    'method': ['GET', 'POST', 'GET', 'POST', 'GET', 'POST'],
-    'body': ['{"username": "user1", "password": "pass123"}', '{"search_query": "product_name"}', '', '{"username": "user2", "password": "pass456"}', '', '{"admin": true}'],
-    'headers': ['Accept-Language: en-US', 'Content-Type: application/json', 'Accept-Encoding: gzip, deflate', 'User-Agent: Mozilla/5.0', '', ''],
-    'target_variable': ['safe', 'safe', 'unsafe', 'unsafe', 'safe', 'unsafe']  # 示例的目标变量
-}
+# 加载 JSON 数据
+with open('data.json', 'r') as f:
+    json_data = json.load(f)
 
-df = pd.DataFrame(data)
-
-# 对字符串特征进行编码并保存编码器对象
-label_encoders = {}
-for column in ['uri', 'host', 'referer', 'cookie', 'method', 'body', 'headers']:
-    label_encoders[column] = LabelEncoder()
-    df[column + '_encoded'] = label_encoders[column].fit_transform(df[column])
-    df = df.drop(column, axis=1)
+# 预处理数据
+df, label_encoders = preprocess_data(json_data)
 
 # 划分特征和目标变量
-X = df.drop('target_variable', axis=1)
-y = df['target_variable']
+X = df.drop('target_variable_encoded', axis=1)
+y = df['target_variable_encoded']
+
+# 划分训练集和测试集
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
 # 创建并训练 CatBoost 模型
-model = CatBoostClassifier(iterations=100, learning_rate=0.1, depth=6)
-model.fit(X, y, verbose=10)
+model = CatBoostClassifier(iterations=100, learning_rate=0.1, depth=6, early_stopping_rounds=10)
+model.fit(X_train, y_train, eval_set=(X_test, y_test), verbose=10)
 
 # 保存模型
 model.save_model("security.cbm")
+
+# 保存编码器
+save_label_encoders(label_encoders, "security_label_encoders.pkl")
+
+# 在测试集上评估模型
+y_pred = model.predict(X_test)
+accuracy = (y_pred == y_test).mean()
+print(f"Test Accuracy: {accuracy}")
+print(f"Predicted: {y_pred}")
+print(f"Actual: {y_test.values}")
 ```
 
 ## 调用模型
 ```python
+import json
 import pandas as pd
 from catboost import CatBoostClassifier
-from sklearn.preprocessing import LabelEncoder
+from prepare import preprocess_data, load_label_encoders
 
 # 加载模型
 model = CatBoostClassifier()
 model.load_model("security.cbm")
 
-# 刚才示例数据
-example_data = [
-    {'uri': '/login', 'host': 'example.com', 'referer': 'https://www.google.com', 'cookie': 'session_id=12345;user_id=67890', 'method': 'GET', 'body': '{"username": "user1", "password": "pass123"}', 'headers': 'Accept-Language: en-US'},
-    {'uri': '/home', 'host': 'example.com', 'referer': 'https://www.google.com', 'cookie': 'session_id=54321;user_id=09876', 'method': 'POST', 'body': '{"search_query": "product_name"}', 'headers': 'Content-Type: application/json'},
-    {'uri': '/admin', 'host': 'example.com', 'referer': '', 'cookie': '', 'method': 'POST', 'body': '{"admin": true}', 'headers': ''}
+# 加载编码器
+label_encoders = load_label_encoders("security_label_encoders.pkl")
+
+# 示例数据，包括一条新的 unsafe 验证数据
+example_data = '''
+[
+    {"uri": "/login", "host": "example.com", "referer": "https://www.google.com", "cookie": "session_id=12345;user_id=67890", "method": "GET", "body": "{\\"username\\": \\"user1\\", \\"password\\": \\"pass123\\"}", "headers": "Accept-Language: en-US"},
+    {"uri": "/home", "host": "example.com", "referer": "https://www.google.com", "cookie": "session_id=54321;user_id=09876", "method": "POST", "body": "{\\"search_query\\": \\"product_name\\"}", "headers": "Content-Type: application/json"},
+    {"uri": "/admin", "host": "example.com", "referer": "", "cookie": "", "method": "POST", "body": "{\\"admin\\": true}", "headers": "User-Agent: chaitin-bypass"}
 ]
+'''
 
-# 对字符串特征进行编码并保存编码器对象
-label_encoders = {}
-for column in ['uri', 'host', 'referer', 'cookie', 'method', 'body', 'headers']:
-    label_encoders[column] = LabelEncoder()
-    df[column + '_encoded'] = label_encoders[column].fit_transform(df[column])
-    df = df.drop(column, axis=1)
+example_data = json.loads(example_data)
 
-# 对示例数据进行编码
-for example in example_data:
-    for column in ['uri', 'host', 'referer', 'cookie', 'method', 'body', 'headers']:
-        example[column + '_encoded'] = label_encoders[column].transform([example[column]])[0]
-
-# 提取特征
-X_example = pd.DataFrame(example_data).drop(['uri', 'host', 'referer', 'cookie', 'method', 'body', 'headers'], axis=1)
+# 预处理示例数据
+X_example, _ = preprocess_data(example_data, label_encoders)
 
 # 使用模型进行预测
 predictions = model.predict(X_example)

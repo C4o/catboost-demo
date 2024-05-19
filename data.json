@@ -1,0 +1,8 @@
+[
+    {"uri": "/login", "host": "example.com", "referer": "https://www.google.com", "cookie": "session_id=12345;user_id=67890", "method": "GET", "body": "{\"username\": \"user1\", \"password\": \"pass123\"}", "headers": "Accept-Language: en-US", "target_variable": "safe"},
+    {"uri": "/home", "host": "example.com", "referer": "https://www.google.com", "cookie": "session_id=54321;user_id=09876", "method": "POST", "body": "{\"search_query\": \"product_name\"}", "headers": "Content-Type: application/json", "target_variable": "safe"},
+    {"uri": "/products", "host": "example.com", "referer": "https://www.bing.com", "cookie": "session_id=98765;user_id=43210", "method": "GET", "body": "", "headers": "Accept-Encoding: gzip, deflate", "target_variable": "safe"},
+    {"uri": "/login", "host": "example.com", "referer": "https://www.yahoo.com", "cookie": "session_id=24680;user_id=13579", "method": "POST", "body": "{\"username\": \"user2\", \"password\": \"pass456\"}", "headers": "User-Agent: Mozilla/5.0", "target_variable": "safe"},
+    {"uri": "/about", "host": "example.com", "referer": "", "cookie": "", "method": "GET", "body": "", "headers": "", "target_variable": "safe"},
+    {"uri": "/admin", "host": "example.com", "referer": "", "cookie": "", "method": "POST", "body": "{\"admin\": true}", "headers": "User-Agent: chaitin-bypass", "target_variable": "unsafe"}
+]
