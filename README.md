@@ -17,9 +17,9 @@ print('NumPy version {}'.format(np.__version__))
 print('Pandas version {}'.format(pd.__version__))
 
 $ python cb.py
-CatBoost version 0.14.2
-NumPy version 1.16.3
-Pandas version 0.24.2
+CatBoost version 1.2.5
+NumPy version 1.23.5
+Pandas version 1.5.3
 ```
 
 ## 准备和预处理数据
