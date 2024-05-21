@@ -165,3 +165,143 @@ Example 3: Predicted result is 1
 ```
 
 # WAF调用
+## HTTP
+### openresty client
+nginx.conf
+```nginx
+
+```
+cb_client.lua
+```lua
+local http = require "resty.http"
+local cjson = require "cjson"
+
+-- 读取客户端请求的body
+ngx.req.read_body()
+local body_data = ngx.req.get_body_data()
+
+-- 获取请求的各个特征
+local uri = ngx.var.uri
+local host = ngx.var.host
+local referer = ngx.req.get_headers()["referer"] or ""
+local cookie = ngx.var.http_cookie or ""
+local method = ngx.req.get_method()
+local body = body_data or ""
+local ua = ngx.req.get_headers()["user-agent"] or ""
+local headers = ngx.req.get_headers()
+
+-- 拼接成JSON格式
+local request_data = {
+    uri = uri,
+    host = host,
+    referer = referer,
+    cookie = cookie,
+    method = method,
+    body = body,
+    -- headers = cjson.encode(headers)
+    headers = "User-Agent: "..ua
+}
+
+-- 创建HTTP客户端实例
+local httpc = http.new()
+
+-- 发送请求到本地的Python服务器
+local res, err = httpc:request_uri("http://127.0.0.1:5000/predict", {
+    method = "POST",
+    body = cjson.encode(request_data),
+    headers = {
+        ["Content-Type"] = "application/json",
+    }
+})
+
+if not res then
+    ngx.status = ngx.HTTP_INTERNAL_SERVER_ERROR
+    ngx.say("Failed to request: ", err)
+    return
+end
+
+-- 解析响应
+local prediction = res.headers["X-Prediction"]
+
+if not prediction then
+    ngx.status = ngx.HTTP_INTERNAL_SERVER_ERROR
+    ngx.say("Prediction not found in response headers")
+    return
+end
+
+-- 将预测结果返回给客户端
+ngx.status = res.status
+if predict == 1 then
+    ngx.status = 403
+    ngx.say("Prediction is DENY")
+end
+```
+
+### python server
+cb_server.py
+```python
+from flask import Flask, request, jsonify
+import pandas as pd
+from catboost import CatBoostClassifier
+import joblib
+
+app = Flask(__name__)
+
+# 加载模型和编码器
+model = CatBoostClassifier()
+model.load_model("security.cbm")
+label_encoders = joblib.load("security_label_encoders.pkl")
+
+def preprocess_data(json_data):
+    if isinstance(json_data, dict):
+        json_data = [json_data]
+    
+    df = pd.DataFrame(json_data)
+    encoded_data = {}
+    for column in df.columns:
+        if column in label_encoders:
+            if df[column].dtype == object:
+                df[column + '_encoded'] = df[column].apply(lambda x: label_encoders[column].transform([x])[0] if x in label_encoders[column].classes_ else -1)
+                encoded_data[column + '_encoded'] = df[column + '_encoded'].tolist()
+            else:
+                encoded_data[column] = df[column].tolist()
+    return pd.DataFrame(encoded_data)
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    data = request.json
+    X_example = preprocess_data(data)
+    predictions = model.predict(X_example)
+    return '', 200, {'X-Prediction': str(predictions[0])}
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000)
+```
+### 手动请求测试
+```shell
+$ cat cb_body.txt
+{"uri": "/admin", "host": "example.com", "referer": "", "cookie": "", "method": "POST", "body": "{\"admin\": true}", "headers": "User-Agent: chaitin-bypass"}
+
+$ curl -X POST http://localhost:5000/predict -H "Content-Type: application/json" -d @cb_body.txt -v
+Note: Unnecessary use of -X or --request, POST is already inferred.
+*   Trying [::1]:5000...
+*   Trying 127.0.0.1:5000...
+* Connected to localhost (127.0.0.1) port 5000
+> POST /predict HTTP/1.1
+> Host: localhost:5000
+> User-Agent: curl/8.4.0
+> Accept: */*
+> Content-Type: application/json
+> Content-Length: 157
+>
+< HTTP/1.1 200 OK
+< Server: Werkzeug/2.2.3 Python/3.10.10
+< Date: Tue, 21 May 2024 06:21:50 GMT
+< X-Prediction: 1
+< Content-Type: text/html; charset=utf-8
+< Content-Length: 0
+< Connection: close
+<
+* Closing connection
+```
+## FFI - TODO

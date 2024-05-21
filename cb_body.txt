@@ -1,0 +1,1 @@
+{"uri": "/admin", "host": "example.com", "referer": "", "cookie": "", "method": "POST", "body": "{\"admin\": true}", "headers": "User-Agent: chaitin-bypass"}
