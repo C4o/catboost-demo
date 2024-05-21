@@ -318,4 +318,54 @@ Note: Unnecessary use of -X or --request, POST is already inferred.
 <
 * Closing connection
 ```
+调用效果
+```shell
+恶意流量
+$ curl -XPOST 127.0.0.1/admin -H "host: example.com" -H "User-Agent: chaitin-bypass" -d '{"admin": true}' -v
+Note: Unnecessary use of -X or --request, POST is already inferred.
+*   Trying 127.0.0.1:80...
+* Connected to 127.0.0.1 (127.0.0.1) port 80 (#0)
+> POST /admin HTTP/1.1
+> Host: example.com
+> Accept: */*
+> User-Agent: chaitin-bypass
+> Content-Length: 15
+> Content-Type: application/x-www-form-urlencoded
+>
+* upload completely sent off: 15 out of 15 bytes
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Server: openresty/1.25.3.1
+< Date: Tue, 21 May 2024 12:42:23 GMT
+< Content-Type: application/octet-stream
+< Transfer-Encoding: chunked
+< Connection: keep-alive
+<
+Prediction is DENY
+* Connection #0 to host 127.0.0.1 left intact
+
+正常流量
+$ curl -XPOST 127.0.0.1/admin -H "host: example.com" -H "User-Agent: normal" -d '{"admin": true}' -v
+Note: Unnecessary use of -X or --request, POST is already inferred.
+*   Trying 127.0.0.1:80...
+* Connected to 127.0.0.1 (127.0.0.1) port 80 (#0)
+> POST /admin HTTP/1.1
+> Host: example.com
+> Accept: */*
+> User-Agent: normal
+> Content-Length: 15
+> Content-Type: application/x-www-form-urlencoded
+>
+* upload completely sent off: 15 out of 15 bytes
+* Mark bundle as not supporting multiuse
+< HTTP/1.1 200 OK
+< Server: openresty/1.25.3.1
+< Date: Tue, 21 May 2024 12:43:51 GMT
+< Content-Type: application/octet-stream
+< Transfer-Encoding: chunked
+< Connection: keep-alive
+<
+Prediction is ALLOW
+* Connection #0 to host 127.0.0.1 left intact
+```
 ## FFI - TODO

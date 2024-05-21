@@ -56,7 +56,8 @@ end
 
 -- 将预测结果返回给客户端
 ngx.status = res.status
-if predict == 1 then
-    ngx.status = 403
+if prediction == "1" then
     ngx.say("Prediction is DENY")
+else
+    ngx.say("Prediction is ALLOW")
 end
