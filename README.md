@@ -169,7 +169,21 @@ Example 3: Predicted result is 1
 ### openresty client
 nginx.conf
 ```nginx
+...
+http{
+    ...
+    server {
+        listen       80;
+        server_name  _;
 
+        #charset koi8-r;
+
+        #access_log  logs/host.access.log  main;
+
+        rewrite_by_lua_file /usr/local/openresty/lualib/cb_client.lua;
+    }
+    ...
+}
 ```
 cb_client.lua
 ```lua
