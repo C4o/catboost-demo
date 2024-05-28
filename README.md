@@ -181,6 +181,8 @@ http{
         #access_log  logs/host.access.log  main;
 
         rewrite_by_lua_file /usr/local/openresty/lualib/cb_client.lua;
+        # 业务后端
+        proxy_pass http://upstream;
     }
     ...
 }
