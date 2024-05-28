@@ -169,34 +169,52 @@ Example 3: Predicted result is 1
 ### openresty client
 nginx.conf
 ```nginx
-...
-http{
-    ...
+#user  nobody;
+worker_processes  auto;
+error_log  logs/error.log;
+pid        logs/nginx.pid;
+
+events {
+    worker_connections  1024;
+}
+
+http {
+    include       mime.types;
+    default_type  application/octet-stream;
+    sendfile        on;
+    #tcp_nopush     on;
+
+    keepalive_timeout  65;
+
+    #gzip  on;
+
     server {
         listen       80;
         server_name  _;
 
-        #charset koi8-r;
-
-        #access_log  logs/host.access.log  main;
-
-        rewrite_by_lua_file /usr/local/openresty/lualib/cb_client.lua;
-        # 业务后端
-        proxy_pass http://upstream;
+        location / {
+            rewrite_by_lua_file /usr/local/openresty/lualib/client.lua;
+            # lua没有做任何操作后，转到对应upstream
+            proxy_pass http://192.168.0.20$request_uri;
+        }
     }
-    ...
 }
 ```
 cb_client.lua
+
+流程是 提取各类http参数缓存 -> 调用modsecurity检测决定是否拦截（拦截就不往下走，直接响应，后续同样）-> 调用safeline检测决定是否拦截 -> 序列化json -> 调用python-catboost服务决定是否拦截 -> 出lua脚本到上面的nginx proxy_pass配置
 ```lua
+cat client.lua
 local http = require "resty.http"
 local cjson = require "cjson"
+local t1k = require "resty.t1k"
 
--- 读取客户端请求的body
+local chaitin_server_addr = "10.18.47.200"
+local modsecurity_server_addr = "10.18.47.199"
+
 ngx.req.read_body()
 local body_data = ngx.req.get_body_data()
 
--- 获取请求的各个特征
 local uri = ngx.var.uri
 local host = ngx.var.host
 local referer = ngx.req.get_headers()["referer"] or ""
@@ -206,7 +224,44 @@ local body = body_data or ""
 local ua = ngx.req.get_headers()["user-agent"] or ""
 local headers = ngx.req.get_headers()
 
--- 拼接成JSON格式
+-- modsecurity
+local httpc = http.new()
+local res, err = httpc:request_uri("http://".. modsecurity_server_addr .. ngx.var.request_uri, {
+    method = ngx.req.get_method(),
+    headers = ngx.req.get_headers(),
+    body = body,
+
+})
+
+if not res then
+    ngx.say("Failed to request to modsecurity: ", err)
+end
+if res and res.status == ngx.HTTP_FORBIDDEN then
+    ngx.status = ngx.HTTP_FORBIDDEN
+    ngx.say("denied by modsecurity")
+end
+
+
+-- chaitin
+local t = {
+    mode = "block",
+    host = chaitin_server_addr,
+    port = 8000,
+    connect_timeout = 1000,
+    send_timeout = 1000,
+    read_timeout = 1000,
+    req_body_size = 1024,
+    keepalive_size = 256,
+    keepalive_timeout = 60000,
+    remote_addr = "http_x_forwarded_for: " .. ngx.var.remote_addr,
+}
+local ok, err, _ = t1k.do_access(t, true)
+if not ok then
+    ngx.log(ngx.ERR, err)
+end
+
+
+-- catboost prediction
 local request_data = {
     uri = uri,
     host = host,
@@ -214,17 +269,19 @@ local request_data = {
     cookie = cookie,
     method = method,
     body = body,
-    -- headers = cjson.encode(headers)
     headers = "User-Agent: "..ua
 }
 
--- 创建HTTP客户端实例
+local encoder = cjson.new()
+encoder.encode_sparse_array(true, 1, 0)
+encoder.encode_escape_forward_slash(false)
+
+--init httpc
 local httpc = http.new()
 
--- 发送请求到本地的Python服务器
 local res, err = httpc:request_uri("http://127.0.0.1:5000/predict", {
     method = "POST",
-    body = cjson.encode(request_data),
+    body = encoder.encode(request_data),
     headers = {
         ["Content-Type"] = "application/json",
     }
@@ -236,7 +293,6 @@ if not res then
     return
 end
 
--- 解析响应
 local prediction = res.headers["X-Prediction"]
 
 if not prediction then
@@ -245,10 +301,8 @@ if not prediction then
     return
 end
 
--- 将预测结果返回给客户端
-ngx.status = res.status
-if predict == 1 then
-    ngx.status = 403
+if prediction == "1" then
+    ngx.status = ngx.HTTP_FORBIDDEN
     ngx.say("Prediction is DENY")
 end
 ```
